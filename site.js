@@ -92,33 +92,119 @@ function averagePoints(p){
 function meetName(id){const m=DATA.Meets.find(x=>firstValue(x,["Meet ID"])===id);return m?firstValue(m,["Meet"]):id}
 function meetDate(id){const m=DATA.Meets.find(x=>firstValue(x,["Meet ID"])===id);return m?firstValue(m,["Date"]):""}
 
+// INJURY RESERVE REPLACEMENT
+// A runner with NO fantasy team is considered Injury Reserve.
+// If a team has 3 or more DNS runners in a meet, the fastest IR
+// runner who actually ran that meet becomes the team's replacement.
+
+function getIRReplacement(team,id){
+  const teamRows=meetResults(id).filter(r=>{
+    const p=DATA.Players.find(x=>playerId(x)===resultPlayerId(r));
+    return resultTeam(r,p||{})===team;
+  });
+
+  // Three or more DNS runners triggers an IR replacement.
+  if(teamRows.filter(isDNS).length<3)return null;
+
+  // Find runners who are not assigned to any fantasy team.
+  const eligible=meetResults(id)
+    .filter(r=>{
+      if(isDNS(r)||isDNF(r))return false;
+
+      const p=DATA.Players.find(x=>playerId(x)===resultPlayerId(r));
+      if(!p)return false;
+
+      // No fantasy team = Injury Reserve.
+      const playerTeam=firstValue(p,["Team","Fantasy Team"]);
+      if(String(playerTeam||"").trim()!=="")return false;
+
+      return Number.isFinite(
+        raceTimeSeconds(firstValue(r,["Time"]))
+      );
+    })
+    .map(r=>({
+      ...r,
+      _time:raceTimeSeconds(firstValue(r,["Time"])),
+      _isIRReplacement:true
+    }))
+    .sort((a,b)=>a._time-b._time);
+
+  // Fastest IR runner who actually ran.
+  return eligible.length?eligible[0]:null;
+}
+
 function buildTeamMeet(team,id){
   const rows=meetResults(id).filter(r=>{
     const p=DATA.Players.find(x=>playerId(x)===resultPlayerId(r));
     return resultTeam(r,p||{})===team;
   });
-  const finished=rows.filter(r=>!isDNS(r)&&!isDNF(r)&&raceTimeSeconds(firstValue(r,["Time"]))!==null)
+
+  // Get the team's normal finished runners.
+  const finished=rows
+    .filter(r=>!isDNS(r)&&!isDNF(r)&&raceTimeSeconds(firstValue(r,["Time"]))!==null)
     .map(r=>({...r,_racePlace:racePlace(r,id)}))
     .sort((a,b)=>a._racePlace-b._racePlace);
+
   const dnfs=rows.filter(isDNF);
-  // Team place is the order of the team's runners based on their race place.
+
+  // Check whether this team gets an IR replacement.
+  const ir=getIRReplacement(team,id);
+
+  // Add the IR replacement to the team's runners.
+  if(ir){
+    ir._racePlace=racePlace(ir,id);
+    finished.push(ir);
+    finished.sort((a,b)=>a._racePlace-b._racePlace);
+  }
+
+  // Team place is based on race place.
+  // DNF runners are placed after finished runners.
   const ordered=finished.concat(dnfs);
   ordered.forEach((r,i)=>r.teamPlace=i+1);
-  const scoring=ordered.slice(0,5), extra=ordered.slice(5), dns=rows.filter(isDNS);
-  return {rows,scoring,extra,dns,score:scoring.reduce((s,r)=>s+r.teamPlace,0)};
+
+  const scoring=ordered.slice(0,5);
+  const extra=ordered.slice(5);
+  const dns=rows.filter(isDNS);
+
+  return {
+    rows,
+    scoring,
+    extra,
+    dns,
+    ir,
+    score:scoring.reduce((s,r)=>s+r.teamPlace,0)
+  };
 }
+
 function teamFormula(td){
   const parts=td.scoring.map(r=>r.teamPlace)
     .concat(td.extra.map(r=>`(${r.teamPlace})`))
     .concat(td.dns.map(()=>"(DNS)"));
+
   return parts.length?parts.join(" + "):"—";
 }
+
 function teamRunnerFormula(td){
-  const label=r=>{const p=DATA.Players.find(x=>playerId(x)===resultPlayerId(r));return p?esc(p.Name):"Unknown Player"};
-  return td.scoring.map(r=>`${r.teamPlace} ${label(r)}${isDNF(r)?" (DNF)":""}`)
-    .concat(td.extra.map(r=>`(${r.teamPlace} ${label(r)}${isDNF(r)?" (DNF)":""})`))
-    .concat(td.dns.map(r=>`(DNS ${label(r)})`)).join(" + ")||"No runners";
+  const label=r=>{
+    const p=DATA.Players.find(x=>playerId(x)===resultPlayerId(r));
+    const name=p?esc(p.Name):"Unknown Player";
+    return r._isIRReplacement
+      ? `${name} (IR Replacement)`
+      : name;
+  };
+
+  return td.scoring.map(r=>
+    `${r.teamPlace} ${label(r)}${isDNF(r)?" (DNF)":""}`
+  )
+  .concat(td.extra.map(r=>
+    `(${r.teamPlace} ${label(r)}${isDNF(r)?" (DNF)":""})`
+  ))
+  .concat(td.dns.map(r=>
+    `(DNS ${label(r)})`
+  ))
+  .join(" + ")||"No runners";
 }
+
 async function loadWorkbook(){
   try{for(const tab of SHEET_TABS)DATA[tab]=await fetchSheet(tab);document.dispatchEvent(new Event("xcdataready"))}
   catch(err){console.error(err);document.querySelectorAll("[data-error]").forEach(el=>el.innerHTML=`<strong>Data connection problem:</strong> ${esc(err.message)}<br>Make sure the Google Sheet is published to the web and accessible, and the tabs are named Players, Teams, Meets, and Results.`)}

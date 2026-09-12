@@ -1,5 +1,5 @@
 // JL MANN PATRIOTS FANTASY XC
-const SHEET_ID = "1_sNwVFzHNaku83rJMqQcS4p7ZJWY7zrQ8aCzFtJP4XI";
+const SHEET_ID = "1HFZtSJ_JsVPoTKThUnztagSREVcrlD-UfzBIbWTvT_Q";
 const SHEET_TABS = ["Players","Teams","Meets","Results"];
 let DATA = {Players:[], Teams:[], Meets:[], Results:[]};
 

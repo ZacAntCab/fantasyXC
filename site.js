@@ -139,7 +139,7 @@ function renderHome(){
   set("#player-count",DATA.Players.length);document.querySelector("#leader").innerHTML=p?playerLink(p):"—";
   set("#leader-time",p?seasonBest(p):"—");set("#next-meet",upcoming?firstValue(upcoming,["Meet"]):"—");
   set("#next-date",upcoming?firstValue(upcoming,["Date"]):"—");set("#last-meet",completed?firstValue(completed,["Meet"]):"—");set("#last-date",completed?firstValue(completed,["Date"]):"—");
-  const preview=document.querySelector("#preview-players");if(preview)preview.innerHTML=DATA.Players.slice(0,5).map(p=>`<tr><td>${playerLink(p)}</td><td>${esc(firstValue(p,["Grade"]))}</td><td>${esc(seasonBest(p))}</td><td>${esc(averagePoints(p))}</td></tr>`).join("");
+  const preview=document.querySelector("#preview-players");if(preview)preview.innerHTML=DATA.Players.slice(0,5).map(p=>`<tr><td>${playerLink(p)}</td><td>${esc(firstValue(p,["Team"]))}</td><td>${esc(seasonBest(p))}</td><td>${esc(averagePoints(p))}</td></tr>`).join("");
 }
 function renderPlayers(){
   const q=document.querySelector("#player-search"),table=document.querySelector("#player-rows"),profile=document.querySelector("#profile");
